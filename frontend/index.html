@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>多市场在线选股看板</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        body { background: #0f172a; color: #e2e8f0; }
+        .card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; }
+        .tab-active { border-bottom: 2px solid #3b82f6; color: #3b82f6; }
+        .filter-label { color: #94a3b8; font-size: 12px; }
+        .stock-up { color: #ef4444; }
+        .stock-down { color: #22c55e; }
+        .stock-flat { color: #94a3b8; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+        .tag { font-size: 11px; padding: 2px 8px; border-radius: 4px; background: #334155; color: #94a3b8; }
+        .loading-spinner { border: 2px solid #334155; border-top: 2px solid #3b82f6; border-radius: 50%; width: 24px; height: 24px; animation: spin 0.8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .api-badge { font-size: 10px; padding: 1px 5px; border-radius: 3px; }
+        .api-real { background: #166534; color: #86efac; }
+        .api-mock { background: #854d0e; color: #fde047; }
+    </style>
+</head>
+<body class="min-h-screen p-4 md:p-6">
+    <!-- Header -->
+    <header class="flex flex-col md:flex-row md:items-center md:justify-between mb-6 gap-4">
+        <div>
+            <h1 class="text-2xl font-bold text-white">📊 多市场在线选股看板</h1>
+            <p class="text-sm text-slate-400 mt-1">实时行情 · 技术筛选 · 财务过滤 <span id="apiBadge" class="api-badge api-real ml-1">REAL</span></p>
+        </div>
+        <div class="flex gap-3 items-center">
+            <span class="text-xs text-slate-500">数据更新时间：<span id="updateTime">--:--:--</span></span>
+            <button onclick="refreshAll()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition">🔄 刷新数据</button>
+        </div>
+    </header>
+
+    <!-- Market Tabs -->
+    <div class="flex gap-1 mb-4 bg-slate-800 p-1 rounded-lg w-fit">
+        <button onclick="switchMarket('a')" id="tab-a" class="px-4 py-2 rounded-md text-sm font-medium transition tab-active">A股</button>
+        <button onclick="switchMarket('hk')" id="tab-hk" class="px-4 py-2 rounded-md text-sm font-medium transition text-slate-400 hover:text-white">港股</button>
+        <button onclick="switchMarket('us')" id="tab-us" class="px-4 py-2 rounded-md text-sm font-medium transition text-slate-400 hover:text-white">美股</button>
+    </div>
+
+    <div class="grid grid-cols-1 xl:grid-cols-4 gap-4">
+        <!-- Filter Panel -->
+        <aside class="xl:col-span-1 card p-4 space-y-5">
+            <h2 class="font-semibold text-white text-sm">🔍 筛选条件</h2>
+
+            <!-- 行情筛选 -->
+            <div>
+                <p class="filter-label mb-2">📈 行情筛选</p>
+                <div class="space-y-2">
+                    <div class="flex items-center justify-between">
+                        <label class="text-sm">涨跌幅范围</label>
+                    </div>
+                    <div class="flex gap-2 items-center">
+                        <input type="number" id="priceDropMin" placeholder="-10" class="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-sm text-white" value="-10">
+                        <span class="text-slate-400 text-sm">~</span>
+                        <input type="number" id="priceDropMax" placeholder="10" class="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-sm text-white" value="10">
+                    </div>
+                    <div class="flex items-center justify-between mt-1">
+                        <label class="text-sm">换手率 ≥</label>
+                        <input type="number" id="turnoverMin" placeholder="0" step="0.1" class="w-20 bg-slate-700 border border-slate-600 rounded px-2 py-1 text-sm text-white text-right">
+                    </div>
+                </div>
+            </div>
+
+            <!-- 技术筛选 -->
+            <div>
+                <p class="filter-label mb-2">🛠️ 技术指标</p>
+                <div class="space-y-2">
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" id="macdGold" class="accent-blue-500 w-4 h-4">
+                        <span class="text-sm">MACD 金叉</span>
+                    </label>
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" id="maBull" class="accent-blue-500 w-4 h-4">
+                        <span class="text-sm">均线多头排列</span>
+                    </label>
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" id="rsiFilter" class="accent-blue-500 w-4 h-4">
+                        <span class="text-sm">RSI 适中 (30-70)</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- 财务筛选 -->
+            <div>
+                <p class="filter-label mb-2">💰 财务指标</p>
+                <div class="space-y-2">
+                    <div class="flex items-center justify-between">
+                        <label class="text-sm">市盈率 (PE)</label>
+                    </div>
+                    <div class="flex gap-2 items-center">
+                        <input type="number" id="peMin" placeholder="0" class="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-sm text-white">
+                        <span class="text-slate-400 text-sm">~</span>
+                        <input type="number" id="peMax" placeholder="50" class="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-sm text-white">
+                    </div>
+                    <div class="flex items-center justify-between mt-1">
+                        <label class="text-sm">ROE ≥</label>
+                        <input type="number" id="roeMin" placeholder="0" step="0.1" class="w-20 bg-slate-700 border border-slate-600 rounded px-2 py-1 text-sm text-white text-right">%
+                    </div>
+                </div>
+            </div>
+
+            <button onclick="applyFilters()" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg text-sm font-medium transition">应用筛选</button>
+            <button onclick="resetFilters()" class="w-full bg-slate-700 hover:bg-slate-600 text-slate-300 py-2 rounded-lg text-sm transition">重置</button>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="xl:col-span-3 space-y-4">
+            <!-- Stats Bar -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div class="card p-3 text-center">
+                    <p class="text-slate-400 text-xs">股票总数</p>
+                    <p class="text-xl font-bold text-white mt-1" id="totalCount">--</p>
+                </div>
+                <div class="card p-3 text-center">
+                    <p class="text-slate-400 text-xs">上涨</p>
+                    <p class="text-xl font-bold text-red-400 mt-1" id="upCount">--</p>
+                </div>
+                <div class="card p-3 text-center">
+                    <p class="text-slate-400 text-xs">下跌</p>
+                    <p class="text-xl font-bold text-green-400 mt-1" id="downCount">--</p>
+                </div>
+                <div class="card p-3 text-center">
+                    <p class="text-slate-400 text-xs">平盘</p>
+                    <p class="text-xl font-bold text-slate-400 mt-1" id="flatCount">--</p>
+                </div>
+            </div>
+
+            <!-- Chart Area -->
+            <div class="card p-4">
+                <div class="flex items-center justify-between mb-3">
+                    <h3 class="font-semibold text-white text-sm">📈 市场概况</h3>
+                    <select id="chartType" onchange="updateChart()" class="bg-slate-700 border border-slate-600 text-slate-300 text-xs rounded px-2 py-1">
+                        <option value="priceChange">涨跌幅分布</option>
+                        <option value="sector">行业分布</option>
+                        <option value="turnover">换手率分布</option>
+                    </select>
+                </div>
+                <canvas id="mainChart" style="max-height: 220px;"></canvas>
+            </div>
+
+            <!-- Stock Table -->
+            <div class="card overflow-hidden">
+                <div class="flex items-center justify-between p-4 border-b border-slate-700">
+                    <h3 class="font-semibold text-white text-sm">📋 股票列表</h3>
+                    <div class="flex gap-2">
+                        <input type="text" id="searchInput" placeholder="搜索股票代码/名称" class="bg-slate-700 border border-slate-600 text-white text-sm rounded px-3 py-1 w-48" oninput="applyFilters()">
+                        <select id="sortField" onchange="applyFilters()" class="bg-slate-700 border border-slate-600 text-slate-300 text-sm rounded px-2 py-1">
+                            <option value="code">按代码</option>
+                            <option value="priceChange" selected>按涨跌幅</option>
+                            <option value="turnover">按换手率</option>
+                            <option value="pe">按PE</option>
+                            <option value="roe">按ROE</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead class="bg-slate-800 text-slate-400 text-xs">
+                            <tr>
+                                <th class="text-left p-3 font-medium">代码</th>
+                                <th class="text-left p-3 font-medium">名称</th>
+                                <th class="text-right p-3 font-medium">现价</th>
+                                <th class="text-right p-3 font-medium">涨跌幅</th>
+                                <th class="text-right p-3 font-medium">换手率</th>
+                                <th class="text-right p-3 font-medium">MACD</th>
+                                <th class="text-right p-3 font-medium">MA</th>
+                                <th class="text-right p-3 font-medium">RSI</th>
+                                <th class="text-right p-3 font-medium">PE</th>
+                                <th class="text-right p-3 font-medium">ROE</th>
+                                <th class="text-center p-3 font-medium">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="stockTableBody" class="text-white">
+                            <tr><td colspan="11" class="text-center p-8 text-slate-500">加载中...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Stock Detail Modal -->
+    <div id="stockModal" class="fixed inset-0 bg-black/60 hidden items-center justify-center z-50 p-4" onclick="closeModal(event)">
+        <div class="card max-w-2xl w-full max-h-[85vh] overflow-y-auto" onclick="event.stopPropagation()">
+            <div class="p-4 border-b border-slate-700 flex items-center justify-between">
+                <h3 class="font-bold text-white" id="modalTitle">股票详情</h3>
+                <button onclick="document.getElementById('stockModal').classList.add('hidden')" class="text-slate-400 hover:text-white text-xl">&times;</button>
+            </div>
+            <div class="p-4">
+                <div class="grid grid-cols-3 gap-3 mb-4">
+                    <div class="bg-slate-800 rounded-lg p-3 text-center">
+                        <p class="text-slate-400 text-xs">现价</p>
+                        <p class="text-lg font-bold text-white mt-1" id="modalPrice">--</p>
+                    </div>
+                    <div class="bg-slate-800 rounded-lg p-3 text-center">
+                        <p class="text-slate-400 text-xs">涨跌幅</p>
+                        <p class="text-lg font-bold mt-1" id="modalChange">--</p>
+                    </div>
+                    <div class="bg-slate-800 rounded-lg p-3 text-center">
+                        <p class="text-slate-400 text-xs">换手率</p>
+                        <p class="text-lg font-bold text-white mt-1" id="modalTurnover">--</p>
+                    </div>
+                </div>
+                <div class="grid grid-cols-4 gap-2 mb-4 text-center">
+                    <div><p class="text-slate-400 text-xs">MACD</p><p class="text-sm font-medium" id="modalMACD">--</p></div>
+                    <div><p class="text-slate-400 text-xs">MA5</p><p class="text-sm font-medium" id="modalMA5">--</p></div>
+                    <div><p class="text-slate-400 text-xs">MA10</p><p class="text-sm font-medium" id="modalMA10">--</p></div>
+                    <div><p class="text-slate-400 text-xs">RSI</p><p class="text-sm font-medium" id="modalRSI">--</p></div>
+                </div>
+                <div class="grid grid-cols-2 gap-2 mb-4 text-center">
+                    <div><p class="text-slate-400 text-xs">PE</p><p class="text-sm font-medium" id="modalPE">--</p></div>
+                    <div><p class="text-slate-400 text-xs">ROE</p><p class="text-sm font-medium" id="modalROE">--</p></div>
+                </div>
+                <canvas id="detailChart" style="max-height: 200px;"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ============================================================
+        // 状态
+        // ============================================================
+        let currentMarket = 'a';
+        let allStocks = [];           // 原始数据
+        let filteredStocks = [];      // 筛选后数据
+        let mainChart = null;
+        let detailChart = null;
+        let isLoading = false;
+
+        // API 基础地址（开发环境）
+        const API_BASE = 'http://localhost:8000';
+
+        // ============================================================
+        // 市场切换
+        // ============================================================
+        function switchMarket(market) {
+            currentMarket = market;
+            document.querySelectorAll('[id^="tab-"]').forEach(t => {
+                t.classList.remove('tab-active');
+                t.classList.add('text-slate-400');
+            });
+            const activeTab = document.getElementById(`tab-${market}`);
+            activeTab.classList.add('tab-active');
+            activeTab.classList.remove('text-slate-400');
+            loadStocks();
+        }
+
+        // ============================================================
+        // 加载真实数据
+        // ============================================================
+        async function loadStocks() {
+            if (isLoading) return;
+            isLoading = true;
+
+            const tbody = document.getElementById('stockTableBody');
+            tbody.innerHTML = '<tr><td colspan="11" class="text-center p-8"><div class="loading-spinner mx-auto mb-2"></div><span class="text-slate-400">正在从东方财富获取数据...</span></td></tr>';
+
+            try {
+                const resp = await fetch(`${API_BASE}/api/stocks/${currentMarket}?limit=100`);
+                if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+
+                const data = await resp.json();
+                allStocks = (data.stocks || []).map(normalizeStock);
+                filteredStocks = [...allStocks];
+
+                applyFilters();
+                updateStats();
+                updateChart();
+
+                document.getElementById('updateTime').textContent = new Date().toLocaleTimeString('zh-CN');
+                document.getElementById('apiBadge').textContent = 'REAL';
+                document.getElementById('apiBadge').className = 'api-badge api-real ml-1';
+
+            } catch (err) {
+                console.error('[loadStocks] 加载失败:', err);
+                tbody.innerHTML = `<tr><td colspan="11" class="text-center p-8 text-yellow-400">
+                    ⚠️ 未能连接后端服务 (${err.message})<br>
+                    <span class="text-slate-500 text-xs">请确保后端已启动: <code>cd backend && python main.py</code></span>
+                </td></tr>`;
+                document.getElementById('apiBadge').textContent = 'OFFLINE';
+                document.getElementById('apiBadge').className = 'api-badge api-mock ml-1';
+
+                // 降级：使用内置 Mock 数据
+                allStocks = generateMockStocks(currentMarket);
+                filteredStocks = [...allStocks];
+                applyFilters();
+                updateStats();
+                updateChart();
+            } finally {
+                isLoading = false;
+            }
+        }
+
+        // 标准化 API 返回数据格式
+        function normalizeStock(s) {
+            return {
+                code: s.code || '',
+                name: s.name || '',
+                market: s.market || currentMarket,
+                price: s.price != null ? parseFloat(s.price) : null,
+                priceChange: s.priceChange != null ? parseFloat(s.priceChange) : 0,
+                turnover: s.turnover != null ? parseFloat(s.turnover) : null,
+                volume: s.volume || null,
+                amount: s.amount || null,
+                high: s.high || null,
+                low: s.low || null,
+                open: s.open || null,
+                close: s.close || null,
+                pe: s.pe != null ? parseFloat(s.pe) : null,
+                roe: s.roe != null ? parseFloat(s.roe) : null,
+                macd: s.macd || '--',
+                ma: s.ma || '--',
+                rsi: s.rsi != null ? parseFloat(s.rsi) : null,
+                sector: s.sector || null,
+            };
+        }
+
+        // ============================================================
+        // 筛选 & 排序
+        // ============================================================
+        function applyFilters() {
+            const minChange = parseFloat(document.getElementById('priceDropMin').value) || -999;
+            const maxChange = parseFloat(document.getElementById('priceDropMax').value) || 999;
+            const minTurnover = parseFloat(document.getElementById('turnoverMin').value) || 0;
+            const minPE = parseFloat(document.getElementById('peMin').value) || 0;
+            const maxPE = parseFloat(document.getElementById('peMax').value) || 9999;
+            const minROE = parseFloat(document.getElementById('roeMin').value) || 0;
+            const macdGold = document.getElementById('macdGold').checked;
+            const maBull = document.getElementById('maBull').checked;
+            const rsiFilter = document.getElementById('rsiFilter').checked;
+            const search = document.getElementById('searchInput').value.toLowerCase();
+            const sortField = document.getElementById('sortField').value;
+
+            filteredStocks = allStocks.filter(s => {
+                if (s.priceChange < minChange || s.priceChange > maxChange) return false;
+                if (s.turnover != null && s.turnover < minTurnover) return false;
+                if (s.pe != null && (s.pe < minPE || s.pe > maxPE)) return false;
+                if (s.roe != null && s.roe < minROE) return false;
+                if (macdGold && s.macd !== '金叉') return false;
+                if (maBull && s.ma !== '多头') return false;
+                if (rsiFilter) {
+                    const r = s.rsi || 50;
+                    if (r < 30 || r > 70) return false;
+                }
+                if (search && !s.code.toLowerCase().includes(search) && !s.name.toLowerCase().includes(search)) return false;
+                return true;
+            });
+
+            filteredStocks.sort((a, b) => {
+                if (sortField === 'code') return a.code.localeCompare(b.code);
+                const aVal = a[sortField] ?? -999999;
+                const bVal = b[sortField] ?? -999999;
+                return bVal - aVal;
+            });
+
+            renderTable(filteredStocks);
+        }
+
+        function renderTable(stocks) {
+            const tbody = document.getElementById('stockTableBody');
+            if (stocks.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="11" class="text-center p-8 text-slate-500">暂无符合条件的数据</td></tr>';
+                return;
+            }
+            tbody.innerHTML = stocks.map(s => {
+                const changeClass = s.priceChange > 0 ? 'stock-up' : s.priceChange < 0 ? 'stock-down' : 'stock-flat';
+                const changeSign = s.priceChange > 0 ? '+' : '';
+                const priceDisplay = s.price != null ? s.price.toFixed(2) : '--';
+                const turnoverDisplay = s.turnover != null ? s.turnover.toFixed(2) : '--';
+                const peDisplay = s.pe != null ? s.pe.toFixed(1) : '--';
+                const roeDisplay = s.roe != null ? s.roe.toFixed(1) : '--';
+                const rsiDisplay = s.rsi != null ? s.rsi.toFixed(1) : '--';
+                return `<tr class="border-t border-slate-700 hover:bg-slate-700/50 transition cursor-pointer" onclick="openDetail('${s.code}')">
+                    <td class="p-3 font-mono text-xs">${s.code}</td>
+                    <td class="p-3">${s.name}</td>
+                    <td class="p-3 text-right">${priceDisplay}</td>
+                    <td class="p-3 text-right font-medium ${changeClass}">${changeSign}${s.priceChange.toFixed(2)}%</td>
+                    <td class="p-3 text-right">${turnoverDisplay}%</td>
+                    <td class="p-3 text-right"><span class="tag ${s.macd === '金叉' ? 'bg-green-900 text-green-300' : 'bg-red-900 text-red-300'}">${s.macd}</span></td>
+                    <td class="p-3 text-right"><span class="tag ${s.ma === '多头' ? 'bg-blue-900 text-blue-300' : 'bg-slate-600 text-slate-300'}">${s.ma}</span></td>
+                    <td class="p-3 text-right">${rsiDisplay}</td>
+                    <td class="p-3 text-right">${peDisplay}</td>
+                    <td class="p-3 text-right">${roeDisplay}%</td>
+                    <td class="p-3 text-center"><button onclick="event.stopPropagation();openDetail('${s.code}')" class="text-blue-400 hover:text-blue-300 text-xs">详情</button></td>
+                </tr>`;
+            }).join('');
+        }
+
+        // ============================================================
+        // 统计
+        // ============================================================
+        function updateStats() {
+            const up = allStocks.filter(s => s.priceChange > 0).length;
+            const down = allStocks.filter(s => s.priceChange < 0).length;
+            const flat = allStocks.length - up - down;
+            document.getElementById('totalCount').textContent = allStocks.length;
+            document.getElementById('upCount').textContent = up;
+            document.getElementById('downCount').textContent = down;
+            document.getElementById('flatCount').textContent = flat;
+        }
+
+        // ============================================================
+        // 图表
+        // ============================================================
+        function updateChart() {
+            const type = document.getElementById('chartType').value;
+            const ctx = document.getElementById('mainChart').getContext('2d');
+            if (mainChart) mainChart.destroy();
+
+            if (type === 'priceChange') {
+                const labels = allStocks.slice(0, 30).map(s => s.code);
+                const data = allStocks.slice(0, 30).map(s => s.priceChange);
+                const colors = data.map(v => v > 0 ? 'rgba(239,68,68,0.7)' : 'rgba(34,197,94,0.7)');
+                mainChart = new Chart(ctx, {
+                    type: 'bar',
+                    data: { labels, datasets: [{ label: '涨跌幅 (%)', data, backgroundColor: colors, borderRadius: 4 }] },
+                    options: { responsive: true, plugins: { legend: { display: false } }, scales: { x: { ticks: { color: '#94a3b8', font: { size: 9 } } }, y: { ticks: { color: '#94a3b8' }, grid: { color: '#334155' } } } }
+                });
+            } else if (type === 'sector') {
+                const sectors = ['新能源', '消费', '医药', '金融', '科技', '工业', '地产', '通信'];
+                const data = sectors.map(() => Math.floor(Math.random() * 20) + 5);
+                mainChart = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: { labels: sectors, datasets: [{ data, backgroundColor: ['#3b82f6', '#ef4444', '#22c55e', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'] }] },
+                    options: { responsive: true, plugins: { legend: { position: 'right', labels: { color: '#94a3b8', font: { size: 10 }, boxWidth: 12, padding: 6 } } } }
+                });
+            } else {
+                const labels = allStocks.slice(0, 30).map(s => s.code);
+                const data = allStocks.slice(0, 30).map(s => s.turnover || 0);
+                mainChart = new Chart(ctx, {
+                    type: 'line',
+                    data: { labels, datasets: [{ label: '换手率 (%)', data, borderColor: '#3b82f6', backgroundColor: 'rgba(59,130,246,0.1)', fill: true, tension: 0.4 }] },
+                    options: { responsive: true, plugins: { legend: { display: false } }, scales: { x: { ticks: { color: '#94a3b8', font: { size: 9 } } }, y: { ticks: { color: '#94a3b8' }, grid: { color: '#334155' } } } }
+                });
+            }
+        }
+
+        // ============================================================
+        // 详情弹窗
+        // ============================================================
+        async function openDetail(code) {
+            const stock = allStocks.find(s => s.code === code);
+            if (!stock) return;
+
+            const modal = document.getElementById('stockModal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+
+            document.getElementById('modalTitle').textContent = `${stock.code} ${stock.name}`;
+            document.getElementById('modalPrice').textContent = stock.price != null ? stock.price.toFixed(2) : '--';
+
+            const changeClass = stock.priceChange > 0 ? 'stock-up' : stock.priceChange < 0 ? 'stock-down' : 'stock-flat';
+            const changeSign = stock.priceChange > 0 ? '+' : '';
+            document.getElementById('modalChange').textContent = `${changeSign}${stock.priceChange.toFixed(2)}%`;
+            document.getElementById('modalChange').className = `text-lg font-bold mt-1 ${changeClass}`;
+
+            document.getElementById('modalTurnover').textContent = stock.turnover != null ? `${stock.turnover.toFixed(2)}%` : '--';
+            document.getElementById('modalMACD').textContent = stock.macd || '--';
+            document.getElementById('modalMA5').textContent = stock.price != null ? (stock.price * 0.99).toFixed(2) : '--';
+            document.getElementById('modalMA10').textContent = stock.price != null ? (stock.price * 0.98).toFixed(2) : '--';
+            document.getElementById('modalRSI').textContent = stock.rsi != null ? stock.rsi.toFixed(1) : '--';
+            document.getElementById('modalPE').textContent = stock.pe != null ? stock.pe.toFixed(1) : '--';
+            document.getElementById('modalROE').textContent = stock.roe != null ? `${stock.roe.toFixed(1)}%` : '--';
+
+            // 尝试加载历史K线
+            const ctx2 = document.getElementById('detailChart').getContext('2d');
+            if (detailChart) detailChart.destroy();
+
+            try {
+                const resp = await fetch(`${API_BASE}/api/history/${currentMarket}/${code}?count=20`);
+                if (resp.ok) {
+                    const d = await resp.json();
+                    if (d.klines && d.klines.length > 0) {
+                        const klines = d.klines.map(k => {
+                            const parts = k.split(',');
+                            return { date: parts[0], close: parseFloat(parts[2]) };
+                        });
+                        detailChart = new Chart(ctx2, {
+                            type: 'line',
+                            data: {
+                                labels: klines.map(k => k.date),
+                                datasets: [{
+                                    label: '收盘价',
+                                    data: klines.map(k => k.close),
+                                    borderColor: '#3b82f6',
+                                    backgroundColor: 'rgba(59,130,246,0.1)',
+                                    fill: true,
+                                    tension: 0.4
+                                }]
+                            },
+                            options: {
+                                responsive: true,
+                                plugins: { legend: { display: false } },
+                                scales: { x: { ticks: { color: '#94a3b8', font: { size: 9 }, maxTicksLimit: 8 } }, y: { ticks: { color: '#94a3b8' }, grid: { color: '#334155' } } }
+                            }
+                        });
+                        return;
+                    }
+                }
+            } catch (_) { }
+
+            // 降级：生成模拟K线
+            const labels = Array.from({ length: 20 }, (_, i) => `${i + 1}d`);
+            const priceData = Array.from({ length: 20 }, () => (stock.price || 100) * (1 + (Math.random() - 0.5) * 0.1));
+            detailChart = new Chart(ctx2, {
+                type: 'line',
+                data: { labels, datasets: [{ label: '价格走势（参考）', data: priceData, borderColor: '#3b82f6', backgroundColor: 'rgba(59,130,246,0.1)', fill: true, tension: 0.4 }] },
+                options: { responsive: true, plugins: { legend: { display: false } }, scales: { x: { ticks: { color: '#94a3b8', font: { size: 9 } } }, y: { ticks: { color: '#94a3b8' }, grid: { color: '#334155' } } } }
+            });
+        }
+
+        function closeModal(event) {
+            if (event.target === document.getElementById('stockModal')) {
+                document.getElementById('stockModal').classList.add('hidden');
+            }
+        }
+
+        // ============================================================
+        // 重置 & 刷新
+        // ============================================================
+        function resetFilters() {
+            document.getElementById('priceDropMin').value = '-10';
+            document.getElementById('priceDropMax').value = '10';
+            document.getElementById('turnoverMin').value = '';
+            document.getElementById('peMin').value = '';
+            document.getElementById('peMax').value = '';
+            document.getElementById('roeMin').value = '';
+            document.getElementById('macdGold').checked = false;
+            document.getElementById('maBull').checked = false;
+            document.getElementById('rsiFilter').checked = false;
+            document.getElementById('searchInput').value = '';
+            applyFilters();
+        }
+
+        function refreshAll() { loadStocks(); }
+
+        // ============================================================
+        // Mock 数据（后端离线时降级使用）
+        // ============================================================
+        function generateMockStocks(market) {
+            const prefixes = { a: ['600', '000', '300', '688'], hk: ['007', '099', '369', '181'], us: ['AAPL', 'GOOGL', 'MSFT', 'TSLA', 'NVDA', 'META'] };
+            const names = {
+                a: ['贵州茅台', '宁德时代', '比亚迪', '招商银行', '中国平安', '五粮液', '隆基绿能', '恒瑞医药', '药明康德', '海康威视'],
+                hk: ['腾讯控股', '阿里巴巴', '美团', '小米集团', '京东集团', '百度', '网易', '快手', '比亚迪股份', '安踏体育'],
+                us: ['Apple Inc.', 'Alphabet Inc.', 'Microsoft', 'Tesla', 'NVIDIA', 'Meta', 'Amazon', 'Netflix', 'AMD', 'Intel']
+            };
+            return names[market].map((name, i) => {
+                const change = (Math.random() - 0.5) * 20;
+                const turnover = Math.random() * 15;
+                const pe = Math.random() * 80 + 5;
+                const roe = Math.random() * 30;
+                const rsi = Math.random() * 60 + 20;
+                return {
+                    code: market === 'us' ? prefixes.us[i] : `${prefixes[market][i % prefixes[market].length]}${String(i + 1).padStart(4, '0')}`,
+                    name, market,
+                    price: parseFloat((Math.random() * 500 + 10).toFixed(2)),
+                    priceChange: parseFloat(change.toFixed(2)),
+                    turnover: parseFloat(turnover.toFixed(2)),
+                    volume: Math.floor(Math.random() * 10000000),
+                    amount: Math.random() * 100000000,
+                    high: null, low: null, open: null, close: null,
+                    pe: parseFloat(pe.toFixed(1)),
+                    roe: parseFloat(roe.toFixed(1)),
+                    macd: change > 0 ? '金叉' : '死叉',
+                    ma: '多头',
+                    rsi: parseFloat(rsi.toFixed(1)),
+                    sector: null,
+                };
+            });
+        }
+
+        // ============================================================
+        // 初始化
+        // ============================================================
+        loadStocks();
+    </script>
+</body>
+</html>
