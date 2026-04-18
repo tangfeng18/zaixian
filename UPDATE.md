@@ -19,6 +19,7 @@
 ### 修改内容
 - 前端从静态页面改为动态数据驱动
 - 后端从框架占位改为真实 API 实现
+- **API 地址更新为真实后端地址**: `https://pure-ambition-production-b39f.up.railway.app`
 
 ### 功能作用
 - 前端可调用后端 API 获取东方财富真实行情数据
