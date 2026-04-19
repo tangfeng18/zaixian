@@ -1,0 +1,10 @@
+[build.builder]
+name = "static"
+debug flags = ["entrypoint"]
+
+[build.args]
+BUILD_PKG = "./"
+
+[deploy]
+method = "static"
+dist = "./"
