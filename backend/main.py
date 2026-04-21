@@ -354,62 +354,50 @@ async def get_signal(code: str):
 # ========================
 def run_screen_job(job_id: str, version: str, pool: str, limit: int):
     """
-    后台执行选股：东方财富预筛选 -> Tushare精筛
+    后台执行选股：Tushare全量精筛
+    使用hs_const获取候选列表，最多筛选200只
     """
     SCREEN_JOBS[job_id] = {'status': 'running', 'progress': 0, 'results': [], 'total': 0, 'checked': 0, 'error': None}
     try:
-        # 第一步：东方财富获取全市场股票
-        em_stocks = em_get_stocks('a', limit=500)
-        total = len(em_stocks)
-        SCREEN_JOBS[job_id]['total'] = total
-
-        if total == 0:
-            SCREEN_JOBS[job_id]['status'] = 'done'
+        # 获取候选列表（用hs_const，可用的接口）
+        all_codes = get_ts_list()
+        SCREEN_JOBS[job_id]['total'] = len(all_codes)
+        if not all_codes:
+            SCREEN_JOBS[job_id]['status'] = 'error'
+            SCREEN_JOBS[job_id]['error'] = '无法获取股票列表'
             return
 
-        # 第二步：预筛选（放量、上涨、换手率适中）
-        pre = em_prefilter(em_stocks)
-        SCREEN_JOBS[job_id]['progress'] = 10
-        # 预筛选结果不计入checked，只作为候选
-
-        # 第三步：Tushare精筛
         check_fn = check_advanced if version == 'advanced' else check_basic
         checked = 0
-        candidates = pre if pre else em_stocks  # 如果预筛选为空则用全量
-        # 限制候选数量避免太慢
-        candidates = candidates[:min(len(candidates), 200)]
+        # 限制候选数量（避免太慢）
+        candidates = all_codes[:200]
 
-        for stock in candidates:
+        for ts_code in candidates:
             checked += 1
-            ts_code = stock['code']
-            if not ts_code.startswith('6') and not ts_code.startswith('0'):
-                continue
-            suffix = '.SH' if ts_code.startswith('6') else '.SZ'
-            ts_code_full = ts_code + suffix
-
             try:
-                df = ts_daily(ts_code_full)
+                df = ts_daily(ts_code)
                 if df is None:
                     SCREEN_JOBS[job_id]['checked'] = checked
+                    SCREEN_JOBS[job_id]['progress'] = min(95, int(checked / len(candidates) * 100))
+                    time.sleep(0.2)
                     continue
                 sigs = compute_signals(df)
                 if check_fn(sigs):
+                    plain_code = ts_code.replace('.SH','').replace('.SZ','')
                     SCREEN_JOBS[job_id]['results'].append({
-                        'code': ts_code,
-                        'name': stock.get('name', ''),
+                        'code': plain_code,
+                        'ts_code': ts_code,
                         '信号': sigs,
                         '卖出信号': check_sell(sigs),
                     })
-                    # 达到目标数量就停
                     if len(SCREEN_JOBS[job_id]['results']) >= limit:
                         break
             except Exception:
                 pass
 
             SCREEN_JOBS[job_id]['checked'] = checked
-            # 动态进度：基于checked数量估算
-            SCREEN_JOBS[job_id]['progress'] = min(95, 10 + int(checked / len(candidates) * 85))
-            time.sleep(0.25)  # Tushare限速
+            SCREEN_JOBS[job_id]['progress'] = min(95, int(checked / len(candidates) * 100))
+            time.sleep(0.25)  # Tushare限速保护
 
         SCREEN_JOBS[job_id]['progress'] = 100
         SCREEN_JOBS[job_id]['status'] = 'done'
