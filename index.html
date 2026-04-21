@@ -1,259 +1,405 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>在线选股共振工具 | 捕捞季节 × 神龙筹码</title>
-<style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif; background: #0d1117; color: #e6edf3; min-height: 100vh; }
-  .container { max-width: 900px; margin: 0 auto; padding: 40px 20px; }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>选股共振工具 - 捕捞季节 + 神龙筹码</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a2e;
+            color: #eee;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container { max-width: 1200px; margin: 0 auto; }
+        h1 {
+            text-align: center;
+            margin-bottom: 10px;
+            color: #00d4ff;
+        }
+        .subtitle {
+            text-align: center;
+            color: #888;
+            margin-bottom: 30px;
+        }
+        .search-box {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+        input {
+            flex: 1;
+            min-width: 200px;
+            padding: 12px;
+            border: 1px solid #333;
+            border-radius: 8px;
+            background: #16213e;
+            color: #fff;
+            font-size: 16px;
+        }
+        button {
+            padding: 12px 30px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: #fff;
+        }
+        .btn-primary:hover { opacity: 0.9; transform: scale(1.02); }
+        .btn-secondary {
+            background: #333;
+            color: #fff;
+        }
+        .btn-secondary:hover { background: #444; }
+        .btn-secondary.active {
+            background: #667eea;
+        }
 
-  .header { text-align: center; margin-bottom: 40px; }
-  .header h1 { font-size: 28px; font-weight: 700; color: #58a6ff; margin-bottom: 8px; }
-  .header p { color: #8b949e; font-size: 14px; }
+        .resonance-count {
+            text-align: center;
+            font-size: 24px;
+            margin-bottom: 20px;
+        }
+        .resonance-count span {
+            color: #00d4ff;
+            font-weight: bold;
+        }
 
-  .card { background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 28px; margin-bottom: 24px; }
-  .card-title { font-size: 16px; font-weight: 600; color: #e6edf3; margin-bottom: 20px; display: flex; align-items: center; gap: 8px; }
+        .stock-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 20px;
+        }
+        .stock-card {
+            background: #16213e;
+            border-radius: 12px;
+            padding: 20px;
+            border: 2px solid transparent;
+            transition: all 0.3s;
+        }
+        .stock-card.resonance {
+            border-color: #00d4ff;
+            box-shadow: 0 0 20px rgba(0, 212, 255, 0.2);
+        }
+        .stock-card.resonance .共振标签 {
+            display: inline-block;
+            background: #00d4ff;
+            color: #000;
+            padding: 3px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        .stock-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        .stock-name {
+            font-size: 20px;
+            font-weight: bold;
+        }
+        .stock-code {
+            color: #888;
+            font-size: 14px;
+        }
+        .stock-price {
+            font-size: 28px;
+            font-weight: bold;
+            color: #00d4ff;
+        }
+        .indicator-row {
+            display: flex;
+            gap: 15px;
+            margin: 10px 0;
+        }
+        .indicator-box {
+            flex: 1;
+            background: #1a1a2e;
+            border-radius: 8px;
+            padding: 12px;
+        }
+        .indicator-title {
+            font-size: 12px;
+            color: #888;
+            margin-bottom: 5px;
+        }
+        .indicator-value {
+            font-size: 16px;
+            font-weight: bold;
+        }
+        .signal-tag {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            margin-top: 5px;
+        }
+        .signal-true { background: #00d4ff; color: #000; }
+        .signal-false { background: #555; color: #888; }
+        .recommend {
+            text-align: center;
+            margin-top: 15px;
+            padding: 10px;
+            border-radius: 8px;
+            font-weight: bold;
+            font-size: 18px;
+        }
+        .recommend-buy { background: #00d4ff; color: #000; }
+        .recommend-watch { background: #333; color: #888; }
 
-  .input-row { display: flex; gap: 12px; flex-wrap: wrap; }
-  .input-row input { flex: 1; min-width: 180px; padding: 12px 16px; background: #0d1117; border: 1px solid #30363d; border-radius: 8px; color: #e6edf3; font-size: 16px; outline: none; transition: border-color 0.2s; }
-  .input-row input:focus { border-color: #58a6ff; }
-  .input-row input::placeholder { color: #484f58; }
+        .filter-section {
+            background: #16213e;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .filter-title {
+            font-size: 14px;
+            color: #888;
+            margin-bottom: 10px;
+        }
+        .filter-tags {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .filter-tag {
+            padding: 8px 15px;
+            border-radius: 20px;
+            background: #333;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .filter-tag:hover { background: #444; }
+        .filter-tag.active { background: #667eea; }
 
-  .btn-row { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
-  .btn { padding: 12px 24px; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
-  .btn-primary { background: #238636; color: #fff; }
-  .btn-primary:hover { background: #2ea043; }
-  .btn-secondary { background: #21262d; color: #8b949e; border: 1px solid #30363d; }
-  .btn-secondary:hover { background: #30363d; color: #e6edf3; }
+        .advanced-filters {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #333;
+        }
+        .filter-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #333;
+        }
+        .filter-item:last-child { border: none; }
+        .filter-name { color: #888; }
+        .filter-status { font-weight: bold; }
+        .filter-pass { color: #00d4ff; }
+        .filter-fail { color: #ff6b6b; }
 
-  .signal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-  .signal-item { background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 16px; }
-  .signal-label { font-size: 12px; color: #8b949e; margin-bottom: 6px; }
-  .signal-value { font-size: 20px; font-weight: 700; }
-  .signal-value.green { color: #3fb950; }
-  .signal-value.red { color: #f85149; }
-  .signal-value.yellow { color: #d29922; }
-  .signal-value.gray { color: #8b949e; }
-
-  .signal-section { margin-top: 20px; }
-  .signal-section-title { font-size: 13px; color: #8b949e; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
-
-  .共振-box { border-radius: 8px; padding: 16px; text-align: center; font-size: 18px; font-weight: 700; margin-top: 20px; }
-  .共振-是 { background: rgba(63,185,80,0.15); border: 1px solid #3fb950; color: #3fb950; }
-  .共振-否 { background: rgba(248,81,73,0.1); border: 1px solid #f85149; color: #f85149; }
-
-  .condition-list { list-style: none; margin-top: 12px; }
-  .condition-list li { padding: 8px 0; border-bottom: 1px solid #21262d; display: flex; justify-content: space-between; align-items: center; font-size: 14px; }
-  .condition-list li:last-child { border-bottom: none; }
-  .cond-name { color: #8b949e; }
-  .cond-val { font-weight: 600; }
-  .cond-val.ok { color: #3fb950; }
-  .cond-val.fail { color: #f85149; }
-  .cond-val.warn { color: #d29922; }
-
-  .loading { text-align: center; padding: 40px; color: #8b949e; }
-  .loading::after { content: '...'; animation: dots 1.5s infinite; }
-  @keyframes dots { 0%,20%{content:'.'} 40%{content:'..'} 60%,100%{content:'...'} }
-
-  .error-msg { background: rgba(248,81,73,0.1); border: 1px solid #f85149; border-radius: 8px; padding: 16px; color: #f85149; text-align: center; }
-  .footer { text-align: center; padding: 30px; color: #484f58; font-size: 12px; }
-
-  .grid-full { grid-column: 1 / -1; }
-  .flex-row { display: flex; gap: 16px; flex-wrap: wrap; }
-  .flex-row .signal-item { flex: 1; min-width: 200px; }
-
-  .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; }
-  .badge-green { background: rgba(63,185,80,0.2); color: #3fb950; }
-  .badge-red { background: rgba(248,81,73,0.2); color: #f85149; }
-  .badge-yellow { background: rgba(210,153,34,0.2); color: #d29922; }
-</style>
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #888;
+        }
+        .error {
+            background: #ff6b6b;
+            color: #fff;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        @media (max-width: 600px) {
+            .stock-grid { grid-template-columns: 1fr; }
+            h1 { font-size: 24px; }
+        }
+    </style>
 </head>
 <body>
-<div class="container">
+    <div class="container">
+        <h1>🎯 选股共振工具</h1>
+        <p class="subtitle">捕捞季节 + 神龙筹码 双指标共振</p>
 
-  <div class="header">
-    <h1>📈 在线选股共振工具</h1>
-    <p>「捕捞季节 × 神龙筹码」双指标共振 · Tushare Pro 数据</p>
-  </div>
+        <div class="filter-section">
+            <div class="filter-title">筛选模式</div>
+            <div class="filter-tags">
+                <button class="filter-tag active" data-mode="basic" onclick="setMode('basic')">📋 基础版</button>
+                <button class="filter-tag" data-mode="advanced" onclick="setMode('advanced')">⚡ 进阶版（提高胜率）</button>
+            </div>
+            <div class="advanced-filters" id="advancedFilters" style="display:none;">
+                <div class="filter-item">
+                    <span class="filter-name">📈 趋势过滤（站上20日均线+均线向上）</span>
+                    <span class="filter-status" id="filterTrend">—</span>
+                </div>
+                <div class="filter-item">
+                    <span class="filter-name">🔗 筹码过滤（套牢比例&lt;50%）</span>
+                    <span class="filter-status" id="filterChip">—</span>
+                </div>
+                <div class="filter-item">
+                    <span class="filter-name">📊 量能过滤（近3日成交量温和放大）</span>
+                    <span class="filter-status" id="filterVolume">—</span>
+                </div>
+            </div>
+        </div>
 
-  <!-- 查询区 -->
-  <div class="card">
-    <div class="card-title">🔍 查询个股信号</div>
-    <div class="input-row">
-      <input type="text" id="stockCode" placeholder="输入股票代码，如 000001" value="000001" maxlength="6">
-      <input type="text" id="stockCode2" placeholder="输入股票代码，如 600519" maxlength="6" style="display:none">
-    </div>
-    <div class="btn-row">
-      <button class="btn btn-primary" onclick="querySignal()">查询信号</button>
-      <button class="btn btn-secondary" onclick="queryMultiple()">+ 对比两只</button>
-    </div>
-  </div>
+        <div class="search-box">
+            <input type="text" id="stockInput" placeholder="输入股票代码，多个用逗号分隔，如：600519,000858,002594">
+            <button class="btn-primary" onclick="analyzeStocks()">🔍 分析</button>
+            <button class="btn-secondary" onclick="demoStocks()">📈 演示股票</button>
+        </div>
 
-  <!-- 结果区 -->
-  <div id="resultArea" style="display:none">
-    <div id="signalCard"></div>
-  </div>
+        <div id="errorBox" style="display:none;" class="error"></div>
 
-  <!-- 批量选股区 -->
-  <div class="card">
-    <div class="card-title">🎯 双指标共振选股</div>
-    <div class="input-row">
-      <select id="screenPool" style="flex:1; padding:12px 16px; background:#0d1117; border:1px solid #30363d; border-radius:8px; color:#e6edf3; font-size:14px;">
-        <option value="hs300">沪深300成分</option>
-        <option value="zz500">中证500成分</option>
-        <option value="gem">创业板</option>
-        <option value="all">全市场A股</option>
-      </select>
-      <select id="screenVersion" style="flex:1; padding:12px 16px; background:#0d1117; border:1px solid #30363d; border-radius:8px; color:#e6edf3; font-size:14px;">
-        <option value="basic">基础版（新手）</option>
-        <option value="advanced">进阶版（提高胜率）</option>
-      </select>
-      <input type="number" id="screenLimit" value="20" min="1" max="100" style="width:80px; padding:12px 8px; background:#0d1117; border:1px solid #30363d; border-radius:8px; color:#e6edf3; font-size:14px;">
-    </div>
-    <div class="btn-row">
-      <button class="btn btn-primary" onclick="screenStocks()">🚀 开始选股</button>
-      <button class="btn btn-secondary" onclick="document.getElementById('screenResult').innerHTML=''">清空结果</button>
-    </div>
-    <div id="screenResult" style="margin-top:20px;"></div>
-  </div>
+        <div class="resonance-count" id="resonanceCount" style="display:none;">
+            共振股票数量：<span id="countNum">0</span>
+        </div>
 
-  <div class="footer">
-    <p>数据来源: Tushare Pro · 指标公式: 捕捞季节 + 神龙筹码</p>
-    <p style="margin-top:6px;">⚠️ 仅供参考，不构成投资建议</p>
-  </div>
-</div>
-
-<script>
-const API = 'https://pure-ambition-production-b39f.up.railway.app';
-
-function fmt(v, decimals=2) {
-  if (v === null || v === undefined || v === '') return '-';
-  if (typeof v === 'boolean') return v ? '✅' : '❌';
-  if (typeof v === 'number') return Number(v).toFixed(decimals);
-  return v;
-}
-
-function boolBadge(v) {
-  if (v === true || v === 'true') return '<span class="badge badge-green">✅ 是</span>';
-  if (v === false || v === 'false') return '<span class="badge badge-red">❌ 否</span>';
-  return '<span class="badge badge-yellow">' + v + '</span>';
-}
-
-function renderSignal(data) {
-  const s = data.signals;
-  const basic = data.basic共振;
-  const advanced = data.advanced共振;
-  const sell = data.sell;
-
-  return `
-  <div class="card">
-    <div class="card-title" style="justify-content:space-between;">
-      <span>📊 ${data.code} <span style="font-weight:400;color:#8b949e;font-size:14px;">${data.ts_code}</span></span>
-      <span style="font-size:12px;color:#484f58;">${s.日期}</span>
+        <div id="results" class="stock-grid"></div>
     </div>
 
-    <div class="共振-box ${basic ? '共振-是' : '共振-否'}">
-      ${basic ? '🎯 基础版共振信号' : '❌ 暂无基础版共振'}
-      <div style="font-size:13px;margin-top:6px;font-weight:400;">进阶版: ${boolBadge(advanced)}</div>
-    </div>
+    <script>
+        let currentMode = 'basic';
+        const API_BASE = '';  // 空字符串=同源，部署时填入后端地址
 
-    <div class="signal-section">
-      <div class="signal-section-title">🐟 捕捞季节指标</div>
-      <ul class="condition-list">
-        <li><span class="cond-name">DIF</span><span class="cond-val">${fmt(s.捕捞_DIF,4)}</span></li>
-        <li><span class="cond-name">DEA</span><span class="cond-val">${fmt(s.捕捞_DEA,4)}</span></li>
-        <li><span class="cond-name">MACD柱</span><span class="cond-val ${s.捕捞_HIST>0?'ok':'fail'}">${fmt(s.捕捞_HIST,4)}</span></li>
-        <li><span class="cond-name">金叉信号</span>${boolBadge(s.捕捞_金叉)}</li>
-        <li><span class="cond-name">红柱趋势</span>${boolBadge(s.捕捞_红柱趋势)}</li>
-        <li><span class="cond-name">彩柱数 (≥2)</span><span class="cond-val ${s.捕捞_彩柱数>=2?'ok':'fail'}">${s.捕捞_彩柱数}</span></li>
-      </ul>
-    </div>
+        function setMode(mode) {
+            currentMode = mode;
+            document.querySelectorAll('.filter-tag').forEach(t => t.classList.remove('active'));
+            document.querySelector(`[data-mode="${mode}"]`).classList.add('active');
+            document.getElementById('advancedFilters').style.display = mode === 'advanced' ? 'block' : 'none';
+        }
 
-    <div class="signal-section">
-      <div class="signal-section-title">🐉 神龙筹码指标</div>
-      <ul class="condition-list">
-        <li><span class="cond-name">红线 (%)</span><span class="cond-val">${fmt(s.神龙_Red_pct)}</span></li>
-        <li><span class="cond-name">橙线 (%)</span><span class="cond-val">${fmt(s.神龙_Orange_pct)}</span></li>
-        <li><span class="cond-name">紫线 (%)</span><span class="cond-val">${fmt(s.神龙_Purple_pct)}</span></li>
-        <li><span class="cond-name">红线金叉</span>${boolBadge(s.神龙_红线金叉)}</li>
-        <li><span class="cond-name">红柱上升</span>${boolBadge(s.神龙_红柱上升)}</li>
-        <li><span class="cond-name">套牢比例 (&lt;50%)</span><span class="cond-val ${s.神龙_套牢比例<0.5?'ok':'fail'}">${fmt(s.神龙_套牢比例*100)}%</span></li>
-      </ul>
-    </div>
+        async function analyzeStocks() {
+            const input = document.getElementById('stockInput').value.trim();
+            if (!input) return alert('请输入股票代码');
+            showLoading();
 
-    <div class="signal-section">
-      <div class="signal-section-title">📐 趋势与量能</div>
-      <ul class="condition-list">
-        <li><span class="cond-name">最新价</span><span class="cond-val green">¥${s.最新价}</span></li>
-        <li><span class="cond-name">股价站上MA20</span>${boolBadge(s.股价站上MA20)}</li>
-        <li><span class="cond-name">MA20向上</span>${boolBadge(s.MA20向上)}</li>
-        <li><span class="cond-name">量能放大</span>${boolBadge(s.量能放大)}</li>
-      </ul>
-    </div>
+            try {
+                const codes = input.split(',').map(c => c.trim()).filter(c => c);
+                const codesStr = codes.join(',');
+                const endpoint = codes.length === 1 ? `/api/analyze/${codes[0]}?advanced=${currentMode === 'advanced'}` : `/api/batch?codes=${codesStr}&advanced=${currentMode === 'advanced'}`;
 
-    <div class="signal-section">
-      <div class="signal-section-title">🚨 卖出信号</div>
-      <ul class="condition-list">
-        <li><span class="cond-name">跌破MA20预警</span>${boolBadge(sell['触发卖出3_跌破MA20'])}</li>
-      </ul>
-    </div>
-  </div>`;
-}
+                const res = await fetch(API_BASE + endpoint);
+                const data = await res.json();
 
-async function querySignal() {
-  const code = document.getElementById('stockCode').value.trim();
-  if (!code) return alert('请输入股票代码');
-  document.getElementById('resultArea').style.display = 'block';
-  document.getElementById('signalCard').innerHTML = '<div class="loading">加载中</div>';
+                if (data.error) {
+                    showError(data.error);
+                    return;
+                }
 
-  try {
-    const r = await fetch(`${API}/api/signal/${code}`);
-    if (!r.ok) { document.getElementById('signalCard').innerHTML = '<div class="error-msg">获取失败，请检查代码是否正确</div>'; return; }
-    const data = await r.json();
-    document.getElementById('signalCard').innerHTML = renderSignal(data);
-  } catch(e) {
-    document.getElementById('signalCard').innerHTML = '<div class="error-msg">网络错误，请稍后重试</div>';
-  }
-}
+                // 兼容处理：单个股票用basic共振判断，批量用共振股票数组
+                const stocks = data.共振股票 || (data.basic共振 !== undefined ? [data] : []);
+                displayResults(stocks, data);
+            } catch (err) {
+                showError('请求失败: ' + err.message);
+            }
+        }
 
-async function screenStocks() {
-  const pool = document.getElementById('screenPool').value;
-  const version = document.getElementById('screenVersion').value;
-  const limit = parseInt(document.getElementById('screenLimit').value);
-  const el = document.getElementById('screenResult');
-  el.innerHTML = '<div class="loading">正在筛选（约需3-5分钟）</div>';
+        async function demoStocks() {
+            document.getElementById('stockInput').value = '600519,000858,002594,300750,600036,601318,000333,002415,600276,000001';
+            await analyzeStocks();
+        }
 
-  try {
-    const r = await fetch(`${API}/api/screen?version=${version}&pool=${pool}&limit=${limit}`);
-    const data = await r.json();
-    if (!data.results || data.results.length === 0) {
-      el.innerHTML = '<div style="text-align:center;color:#8b949e;padding:30px;">未找到符合条件的股票</div>';
-      return;
-    }
-    let html = `<div style="margin-bottom:12px;color:#8b949e;font-size:13px;">找到 <strong style="color:#58a6ff">${data.matched_count}</strong> 只共振股票：</div>`;
-    html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;">';
-    for (const item of data.results) {
-      const s = item.信号;
-      html += `<div style="background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:14px;cursor:pointer;" onclick="document.getElementById('stockCode').value='${item.code}';querySignal();window.scrollTo({top:0,behavior:'smooth'});">
-        <div style="font-size:15px;font-weight:700;margin-bottom:8px;">${item.code} <span style="font-size:12px;color:#3fb950;font-weight:600;">¥${s.最新价}</span></div>
-        <div style="font-size:12px;color:#8b949e;">🐟${boolBadge(s.捕捞_金叉)} 🐉${boolBadge(s.神龙_红线金叉)}</div>
-        <div style="font-size:11px;color:#484f58;margin-top:6px;">彩柱${s.捕捞_彩柱数} | 套牢${fmt(s.神龙_套牢比例*100)}%</div>
-      </div>`;
-    }
-    html += '</div>';
-    el.innerHTML = html;
-  } catch(e) {
-    el.innerHTML = '<div class="error-msg">网络错误，请稍后重试</div>';
-  }
-}
+        function showLoading() {
+            document.getElementById('errorBox').style.display = 'none';
+            document.getElementById('results').innerHTML = '<div class="loading">加载中...</div>';
+        }
 
-// 回车查询
-document.getElementById('stockCode').addEventListener('keydown', e => { if (e.key === 'Enter') querySignal(); });
+        function showError(msg) {
+            const box = document.getElementById('errorBox');
+            box.textContent = msg;
+            box.style.display = 'block';
+            document.getElementById('results').innerHTML = '';
+        }
 
-// 默认加载平安银行
-querySignal();
-</script>
+        function displayResults(stocks, rawData) {
+            const container = document.getElementById('results');
+            const countBox = document.getElementById('resonanceCount');
+            const countNum = document.getElementById('countNum');
+
+            const allStocks = data.共振股票 || [];
+            countNum.textContent = allStocks.length;
+            countBox.style.display = 'block';
+
+            if (allStocks.length === 0) {
+                container.innerHTML = '<div class="loading">没有找到符合条件的股票</div>';
+                return;
+            }
+
+            // 按共振股票优先排序
+            const resonance = allStocks.filter(s => s.basic共振);
+            const noResonance = allStocks.filter(s => !s.basic共振);
+            const sorted = [...resonance, ...noResonance];
+
+            container.innerHTML = sorted.map(s => {
+                const p = s.pledge || {};
+                const sh = s.shenlong || {};
+                const ar = s.advanced_result || {};
+                const isRes = s.basic共振;
+                const isAdvanced = currentMode === 'advanced';
+
+                // 构建筛选结果行
+                let filterRows = '';
+                if (isAdvanced && isRes) {
+                    filterRows = `
+                        <div class="advanced-filters">
+                            <div class="filter-item">
+                                <span class="filter-name">趋势过滤</span>
+                                <span class="filter-status ${ar.trend_filter ? 'filter-pass' : 'filter-fail'}">${ar.trend_filter ? '✓ 通过' : '✗ 未通过'}</span>
+                            </div>
+                            <div class="filter-item">
+                                <span class="filter-name">筹码过滤</span>
+                                <span class="filter-status ${ar.chip_filter ? 'filter-pass' : 'filter-fail'}">${ar.chip_filter ? '✓ 通过' : '✗ 未通过'}</span>
+                            </div>
+                            <div class="filter-item">
+                                <span class="filter-name">量能过滤</span>
+                                <span class="filter-status ${ar.volume_filter ? 'filter-pass' : 'filter-fail'}">${ar.volume_filter ? '✓ 通过' : '✗ 未通过'}</span>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                return `
+                <div class="stock-card ${isRes ? 'resonance' : ''}">
+                    ${isRes ? '<span class="共振标签">⚡ 共振信号</span>' : ''}
+                    <div class="stock-header">
+                        <div>
+                            <div class="stock-name">${s.code}</div>
+                            <div class="stock-code">${s.date}</div>
+                        </div>
+                        <div class="stock-price">¥${s.close}</div>
+                    </div>
+
+                    <div class="indicator-row">
+                        <div class="indicator-box">
+                            <div class="indicator-title">🎣 捕捞季节</div>
+                            <div>金叉信号: <span class="signal-tag ${p.golden_cross ? 'signal-true' : 'signal-false'}">${p.golden_cross ? '✓ 金叉' : '✗ 未金叉'}</span></div>
+                            <div>红柱趋势: <span class="signal-tag ${p.red_trend ? 'signal-true' : 'signal-false'}">${p.red_trend ? '✓ 上升' : '✗ 下降'}</span></div>
+                            <div>彩柱数: ${p.color_bars || 0} ≥ 2</div>
+                            <div>MA5: ${p.ma5 ? p.ma5.toFixed(2) : '-'}, MA20: ${p.ma20 ? p.ma20.toFixed(2) : '-'}</div>
+                        </div>
+                        <div class="indicator-box">
+                            <div class="indicator-title">🐉 神龙筹码</div>
+                            <div>趋势信号: <span class="signal-tag ${sh.trend_signal ? 'signal-true' : 'signal-false'}">${sh.trend_signal ? '✓ 上穿' : '✗ 未上穿'}</span></div>
+                            <div>持股区间: <span class="signal-tag ${sh.hold_zone ? 'signal-true' : 'signal-false'}">${sh.hold_zone ? '✓ 上升' : '✗ 下降'}</span></div>
+                            <div>套牢比例: ${((sh.avg_trapped_rate || 0) * 100).toFixed(0)}%</div>
+                            <div>红线: ${sh.red_line || '-'}, 橙线: ${sh.orange_line || '-'}</div>
+                        </div>
+                    </div>
+                    ${filterRows}
+                    <div class="recommend ${isRes ? 'recommend-buy' : 'recommend-watch'}">${isRes ? '✅ 买入信号' : '⏸️ 观望'}</div>
+                </div>
+                `;
+            }).join('');
+        }
+
+        // 回车搜索
+        document.getElementById('stockInput').addEventListener('keypress', e => {
+            if (e.key === 'Enter') analyzeStocks();
+        });
+    </script>
 </body>
 </html>
