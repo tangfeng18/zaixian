@@ -27,7 +27,7 @@ app = FastAPI(title="多市场选股看板API", version="1.3.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origin_regex=r"https://.*\.github\.io|https://.*\.railway\.app",
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -225,10 +225,6 @@ def em_prefilter(stocks):
 # ========================
 # 东方财富接口
 # ========================
-@app.options("/{path:path}")
-async def cors_preflight(path: str):
-    return {"status": "ok"}
-
 @app.get("/")
 async def root():
     return {"status": "online", "version": "V1.3.0", "timestamp": datetime.now().isoformat()}
