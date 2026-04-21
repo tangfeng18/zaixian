@@ -2,3 +2,4 @@ akshare>=1.18.0
 flask>=3.0.0
 pandas
 numpy
+tushare>=1.4.0
