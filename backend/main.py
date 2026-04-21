@@ -26,7 +26,7 @@ app = FastAPI(title="多市场选股看板API", version="1.3.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origin_regex=r"https://.*\.github\.io|https://.*\.railway\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -225,6 +225,10 @@ def em_prefilter(stocks):
 # ========================
 # 东方财富接口
 # ========================
+@app.options("/{path:path}")
+async def cors_preflight(path: str):
+    return {"status": "ok"}
+
 @app.get("/")
 async def root():
     return {"status": "online", "version": "V1.3.0", "timestamp": datetime.now().isoformat()}
@@ -370,7 +374,7 @@ def run_screen_job(job_id: str, version: str, pool: str, limit: int):
         check_fn = check_advanced if version == 'advanced' else check_basic
         checked = 0
         # 限制候选数量（避免太慢）
-        candidates = all_codes[:200]
+        candidates = all_codes[:100]
 
         for ts_code in candidates:
             checked += 1
@@ -379,7 +383,7 @@ def run_screen_job(job_id: str, version: str, pool: str, limit: int):
                 if df is None:
                     SCREEN_JOBS[job_id]['checked'] = checked
                     SCREEN_JOBS[job_id]['progress'] = min(95, int(checked / len(candidates) * 100))
-                    time.sleep(0.2)
+                    time.sleep(0.1)
                     continue
                 sigs = compute_signals(df)
                 if check_fn(sigs):
@@ -397,7 +401,7 @@ def run_screen_job(job_id: str, version: str, pool: str, limit: int):
 
             SCREEN_JOBS[job_id]['checked'] = checked
             SCREEN_JOBS[job_id]['progress'] = min(95, int(checked / len(candidates) * 100))
-            time.sleep(0.25)  # Tushare限速保护
+            time.sleep(0.15)  # Tushare限速保护
 
         SCREEN_JOBS[job_id]['progress'] = 100
         SCREEN_JOBS[job_id]['status'] = 'done'
